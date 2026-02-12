@@ -1,40 +1,59 @@
-// 行情数据获取 — 新浪财经 + 东方财富
+// 行情数据获取 — 东方财富（UTF-8，无编码问题）
 
 import { StockQuote, KlineItem, normalizeCode } from '@/types/stock';
 
-const SINA_HQ_URL = 'https://hq.sinajs.cn/list=';
+const EAST_QUOTE_URL = 'https://push2.eastmoney.com/api/qt/stock/get';
 const EAST_KLINE_URL = 'https://push2his.eastmoney.com/api/qt/stock/kline/get';
 
-// ============ 实时报价 ============
+// 东财市场代码映射
+function toEastSecid(code: string): string {
+  const norm = normalizeCode(code);
+  if (norm.startsWith('sh')) return `1.${norm.slice(2)}`;
+  if (norm.startsWith('sz')) return `0.${norm.slice(2)}`;
+  if (norm.startsWith('bj')) return `0.${norm.slice(2)}`;
+  return `1.${norm}`;
+}
+
+// ============ 实时报价（东方财富） ============
 
 export async function getQuote(rawCode: string): Promise<StockQuote> {
   const code = normalizeCode(rawCode);
-  const res = await fetch(`${SINA_HQ_URL}${code}`, {
-    headers: { Referer: 'https://finance.sina.com.cn' },
+  const secid = toEastSecid(code);
+
+  const params = new URLSearchParams({
+    secid,
+    fields: 'f43,f44,f45,f46,f47,f48,f50,f51,f52,f55,f57,f58,f60,f168,f170,f171',
+    ut: 'fa5fd1943c7b386f172d6893dbfba10b',
+    _: String(Date.now()),
+  });
+
+  const res = await fetch(`${EAST_QUOTE_URL}?${params}`, {
+    headers: { Referer: 'https://quote.eastmoney.com' },
     next: { revalidate: 0 },
   });
-  const text = await res.text();
-  return parseSinaQuote(code, text);
-}
 
-function parseSinaQuote(code: string, raw: string): StockQuote {
-  // 格式: var hq_str_sh600519="贵州茅台,1800.00,1795.00,..."
-  const match = raw.match(/"(.+)"/);
-  if (!match) throw new Error(`无法解析行情数据: ${code}`);
+  const json = await res.json();
+  const d = json?.data;
+  if (!d) throw new Error(`无法获取行情数据: ${rawCode}`);
 
-  const parts = match[1].split(',');
-  const name = parts[0];
-  const open = parseFloat(parts[1]);
-  const close = parseFloat(parts[2]); // 昨收
-  const price = parseFloat(parts[3]);
-  const high = parseFloat(parts[4]);
-  const low = parseFloat(parts[5]);
-  const volume = parseFloat(parts[8]) / 100; // 股→手
-  const amount = parseFloat(parts[9]) / 10000; // 元→万元
+  // 东财价格字段单位是"分"或"角"，需要根据小数位处理
+  const decimal = d.f59 ?? 2; // 小数位数
+  const divisor = Math.pow(10, decimal);
+
+  const price = d.f43 / divisor;
+  const open = d.f44 / divisor;
+  const high = d.f45 / divisor;
+  const low = d.f46 / divisor;
+  const close = d.f60 / divisor; // 昨收
+  const volume = d.f47 / 100; // 手
+  const amount = d.f48 / 10000; // 万元
+  const changePercent = d.f170 / 100;
+  const change = d.f171 / divisor;
+  const turnover = d.f168 / 100; // 换手率
 
   return {
     code,
-    name,
+    name: d.f58 || d.f57 || rawCode,
     price,
     open,
     close,
@@ -42,29 +61,20 @@ function parseSinaQuote(code: string, raw: string): StockQuote {
     low,
     volume,
     amount,
-    change: +(price - close).toFixed(2),
-    changePercent: +(((price - close) / close) * 100).toFixed(2),
-    turnover: 0, // 需要额外接口
-    time: `${parts[30]} ${parts[31]}`,
+    change: +change.toFixed(decimal),
+    changePercent: +changePercent.toFixed(2),
+    turnover: +turnover.toFixed(2),
+    time: new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }),
   };
 }
 
-// ============ K线数据（东方财富）============
-
-// 东财市场代码映射
-function toEastCode(code: string): { secid: string } {
-  const norm = normalizeCode(code);
-  if (norm.startsWith('sh')) return { secid: `1.${norm.slice(2)}` };
-  if (norm.startsWith('sz')) return { secid: `0.${norm.slice(2)}` };
-  if (norm.startsWith('bj')) return { secid: `0.${norm.slice(2)}` };
-  return { secid: `1.${norm}` };
-}
+// ============ K线数据（东方财富） ============
 
 export type KlinePeriod = 'daily' | '5min';
 
 const PERIOD_MAP: Record<KlinePeriod, string> = {
-  daily: '101',   // 日线
-  '5min': '5',    // 5分钟
+  daily: '101',
+  '5min': '5',
 };
 
 export async function getKlines(
@@ -72,7 +82,7 @@ export async function getKlines(
   period: KlinePeriod = 'daily',
   limit: number = 120,
 ): Promise<KlineItem[]> {
-  const { secid } = toEastCode(rawCode);
+  const secid = toEastSecid(rawCode);
   const klt = PERIOD_MAP[period];
 
   const params = new URLSearchParams({
@@ -80,7 +90,7 @@ export async function getKlines(
     fields1: 'f1,f2,f3,f4,f5,f6',
     fields2: 'f51,f52,f53,f54,f55,f56,f57',
     klt,
-    fqt: '1', // 前复权
+    fqt: '1',
     lmt: String(limit),
     end: '20500101',
     _: String(Date.now()),

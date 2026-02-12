@@ -215,5 +215,5 @@ export default function KlineChart({ klines, title = 'K线图', indicators }: Kl
     });
   }, [klines, indicators, title]);
 
-  return <div ref={chartRef} className="w-full h-[600px]" />;
+  return <div ref={chartRef} className="w-full h-[400px] sm:h-[600px]" />;
 }

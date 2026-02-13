@@ -71,9 +71,10 @@ export async function POST(req: NextRequest) {
 
     // 解密消息
     const decryptedXml = crypt.decryptMsg(msgSignature, timestamp, nonce, encrypt);
+    console.log('[企业微信] 解密后原文:', decryptedXml);
     const msg = parseXML(decryptedXml);
 
-    console.log('[企业微信] 收到消息:', msg.MsgType, msg.Content);
+    console.log('[企业微信] 收到消息:', JSON.stringify(msg));
 
     // 只处理文本消息
     if (msg.MsgType !== 'text') {

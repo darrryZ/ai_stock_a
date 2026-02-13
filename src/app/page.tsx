@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import type { AnalysisResult, KlineItem, NewsItem } from '@/types/stock';
-import { IconSearch, IconChart, IconTrendUp, IconTrendDown, IconMinus, IconShield, IconTarget, IconNews, IconExternalLink, IconBarChart, IconSwap, IconCandlestick, IconActivity, IconStar, IconStarFilled, IconTrash } from '@/components/Icons';
+import { IconSearch, IconChart, IconTrendUp, IconTrendDown, IconMinus, IconShield, IconTarget, IconNews, IconExternalLink, IconBarChart, IconSwap, IconCandlestick, IconActivity, IconStar, IconStarFilled, IconTrash, IconFire } from '@/components/Icons';
 import { useWatchlist } from '@/hooks/useWatchlist';
 
 const KlineChart = dynamic(() => import('@/components/KlineChart'), { ssr: false });
@@ -63,16 +63,28 @@ export default function Home() {
   const { watchlist, loaded: watchlistLoaded, isInWatchlist, toggleStock, removeStock } = useWatchlist();
   const [watchlistQuotes, setWatchlistQuotes] = useState<Record<string, { price: number; changePercent: number; change: number }>>({});
 
-  // 获取大盘数据
+  // 热点板块
+  interface SectorItem { code: string; name: string; price: number; changePercent: number; change: number; }
+  const [sectorGainers, setSectorGainers] = useState<SectorItem[]>([]);
+  const [sectorLosers, setSectorLosers] = useState<SectorItem[]>([]);
+  const [sectorTab, setSectorTab] = useState<'gainers' | 'losers'>('gainers');
+
+  // 获取大盘数据 + 热点板块
   useEffect(() => {
     const fetchMarket = async () => {
       try {
-        const res = await fetch('/api/market-overview');
-        const data = await res.json();
-        if (data.indices) {
-          setIndices(data.indices);
-          setMarketTime(data.time);
+        const [marketRes, sectorRes] = await Promise.all([
+          fetch('/api/market-overview'),
+          fetch('/api/hot-sectors'),
+        ]);
+        const marketData = await marketRes.json();
+        if (marketData.indices) {
+          setIndices(marketData.indices);
+          setMarketTime(marketData.time);
         }
+        const sectorData = await sectorRes.json();
+        if (sectorData.gainers) setSectorGainers(sectorData.gainers);
+        if (sectorData.losers) setSectorLosers(sectorData.losers);
       } catch { /* ignore */ }
       finally { setMarketLoading(false); }
     };
@@ -584,6 +596,48 @@ export default function Home() {
               </div>
             )}
           </div>
+
+          {/* 热点板块 */}
+          {(sectorGainers.length > 0 || sectorLosers.length > 0) && (
+            <div className="mb-8">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-sm sm:text-base font-semibold flex items-center gap-2 text-[var(--text-secondary)]">
+                  <IconFire size={16} className="text-orange-400" />
+                  热点板块
+                </h2>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => setSectorTab('gainers')}
+                    className={`btn-secondary px-3 py-1 text-xs ${sectorTab === 'gainers' ? 'active' : ''}`}
+                  >
+                    🔥 涨幅榜
+                  </button>
+                  <button
+                    onClick={() => setSectorTab('losers')}
+                    className={`btn-secondary px-3 py-1 text-xs ${sectorTab === 'losers' ? 'active' : ''}`}
+                  >
+                    💧 跌幅榜
+                  </button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                {(sectorTab === 'gainers' ? sectorGainers : sectorLosers).map((sector, i) => (
+                  <div
+                    key={sector.code}
+                    className="card px-3 py-2.5 hover:border-[var(--border-hover)] transition-all group"
+                  >
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span className="text-[10px] text-[var(--text-muted)] opacity-60 font-mono w-4">{i + 1}</span>
+                      <span className="text-xs text-[var(--text-primary)] group-hover:text-blue-400 transition-colors truncate">{sector.name}</span>
+                    </div>
+                    <div className={`text-sm font-bold tabular-nums ${priceColor(sector.changePercent)}`}>
+                      {sector.changePercent >= 0 ? '+' : ''}{sector.changePercent.toFixed(2)}%
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* 自选股列表 */}
           {watchlistLoaded && watchlist.length > 0 && (

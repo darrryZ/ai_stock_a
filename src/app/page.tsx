@@ -144,7 +144,7 @@ export default function Home() {
   }, []);
 
   const handleAnalyze = async (inputCode?: string) => {
-    const input = (inputCode || code).trim();
+    let input = (inputCode || code).trim();
     if (!input) return;
     setLoading(true);
     setError('');
@@ -152,6 +152,22 @@ export default function Home() {
     setShowSuggestions(false);
 
     try {
+      // 如果不是纯股票代码格式，先搜索拿到代码
+      const isCode = /^(sh|sz|bj)?\d{6}$/i.test(input);
+      if (!isCode) {
+        const searchRes = await fetch(`/api/search?q=${encodeURIComponent(input)}`);
+        const searchData = await searchRes.json();
+        const results = searchData.results || [];
+        if (results.length === 0) {
+          setError(`未找到"${input}"相关股票`);
+          setLoading(false);
+          return;
+        }
+        // 取第一个匹配结果
+        input = results[0].code;
+        setCode(input);
+      }
+
       const res = await fetch(`/api/analyze?code=${encodeURIComponent(input)}`);
       const data = await res.json();
       if (data.error) {

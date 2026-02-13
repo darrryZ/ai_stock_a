@@ -4,7 +4,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import type { AnalysisResult, KlineItem, NewsItem } from '@/types/stock';
-import { IconSearch, IconChart, IconTrendUp, IconTrendDown, IconMinus, IconShield, IconTarget, IconNews, IconExternalLink, IconBarChart, IconSwap, IconCandlestick, IconActivity } from '@/components/Icons';
+import { IconSearch, IconChart, IconTrendUp, IconTrendDown, IconMinus, IconShield, IconTarget, IconNews, IconExternalLink, IconBarChart, IconSwap, IconCandlestick, IconActivity, IconStar, IconStarFilled, IconTrash } from '@/components/Icons';
+import { useWatchlist } from '@/hooks/useWatchlist';
 
 const KlineChart = dynamic(() => import('@/components/KlineChart'), { ssr: false });
 
@@ -58,6 +59,10 @@ export default function Home() {
   const [marketTime, setMarketTime] = useState('');
   const [marketLoading, setMarketLoading] = useState(true);
 
+  // 自选股
+  const { watchlist, loaded: watchlistLoaded, isInWatchlist, toggleStock, removeStock } = useWatchlist();
+  const [watchlistQuotes, setWatchlistQuotes] = useState<Record<string, { price: number; changePercent: number; change: number }>>({});
+
   // 获取大盘数据
   useEffect(() => {
     const fetchMarket = async () => {
@@ -75,6 +80,33 @@ export default function Home() {
     const timer = setInterval(fetchMarket, 30000); // 30秒刷新
     return () => clearInterval(timer);
   }, []);
+
+  // 自选股行情刷新
+  useEffect(() => {
+    if (!watchlistLoaded || watchlist.length === 0) return;
+    const fetchWatchlistQuotes = async () => {
+      const quotes: Record<string, { price: number; changePercent: number; change: number }> = {};
+      await Promise.all(
+        watchlist.map(async (item) => {
+          try {
+            const res = await fetch(`/api/quote?code=${item.code}`);
+            const data = await res.json();
+            if (data.quote) {
+              quotes[item.code] = {
+                price: data.quote.price,
+                changePercent: data.quote.changePercent,
+                change: data.quote.change,
+              };
+            }
+          } catch { /* ignore */ }
+        })
+      );
+      setWatchlistQuotes(quotes);
+    };
+    fetchWatchlistQuotes();
+    const timer = setInterval(fetchWatchlistQuotes, 30000);
+    return () => clearInterval(timer);
+  }, [watchlist, watchlistLoaded]);
 
   // 搜索建议 — 防抖
   const fetchSuggestions = useCallback(async (query: string) => {
@@ -304,6 +336,16 @@ export default function Home() {
                   </h2>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-[var(--text-muted)] text-xs sm:text-sm font-mono">{result.quote.code}</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); toggleStock(result.quote.code, result.quote.name); }}
+                      className="p-0.5 hover:scale-110 transition-transform"
+                      title={isInWatchlist(result.quote.code) ? '取消收藏' : '加入自选'}
+                    >
+                      {isInWatchlist(result.quote.code)
+                        ? <IconStarFilled size={14} className="text-yellow-400" />
+                        : <IconStar size={14} className="text-[var(--text-muted)] hover:text-yellow-400" />
+                      }
+                    </button>
                     <span className="text-[var(--text-muted)] text-[10px] sm:text-xs opacity-60">{result.quote.time}</span>
                   </div>
                 </div>
@@ -542,6 +584,59 @@ export default function Home() {
               </div>
             )}
           </div>
+
+          {/* 自选股列表 */}
+          {watchlistLoaded && watchlist.length > 0 && (
+            <div className="mb-8">
+              <h2 className="text-sm sm:text-base font-semibold mb-4 flex items-center gap-2 text-[var(--text-secondary)]">
+                <IconStarFilled size={16} className="text-yellow-400" />
+                我的自选
+                <span className="text-[10px] text-[var(--text-muted)] font-normal ml-1">({watchlist.length})</span>
+              </h2>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                {watchlist.map((item) => {
+                  const q = watchlistQuotes[item.code];
+                  return (
+                    <div
+                      key={item.code}
+                      className="card p-4 hover:border-[var(--border-hover)] transition-all group cursor-pointer relative"
+                      onClick={() => {
+                        setCode(item.code);
+                        handleAnalyze(item.code);
+                      }}
+                    >
+                      <button
+                        onClick={(e) => { e.stopPropagation(); removeStock(item.code); }}
+                        className="absolute top-2 right-2 p-1 opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-400 text-[var(--text-muted)]"
+                        title="删除"
+                      >
+                        <IconTrash size={12} />
+                      </button>
+                      <div className="text-xs text-[var(--text-muted)] mb-1 group-hover:text-blue-400 transition-colors truncate">
+                        {item.name}
+                        <span className="ml-1.5 font-mono opacity-60">{item.code.replace(/^(sh|sz|bj)/, '')}</span>
+                      </div>
+                      {q ? (
+                        <>
+                          <div className={`text-lg sm:text-xl font-bold tabular-nums ${priceColor(q.changePercent)}`}>
+                            {q.price.toFixed(2)}
+                          </div>
+                          <div className={`text-xs mt-1 font-medium tabular-nums ${priceColor(q.changePercent)}`}>
+                            {q.changePercent >= 0 ? '+' : ''}{q.changePercent.toFixed(2)}%
+                            <span className="ml-1.5 opacity-60">
+                              {q.change >= 0 ? '+' : ''}{q.change.toFixed(2)}
+                            </span>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="skeleton h-10 mt-1" />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* 提示 */}
           <div className="text-center py-8 sm:py-12">

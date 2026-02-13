@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import type { AnalysisResult, KlineItem, NewsItem } from '@/types/stock';
-import { IconArrowLeft, IconRefresh, IconTrendUp, IconTrendDown, IconMinus, IconShield, IconTarget, IconChart, IconCandlestick, IconNews, IconBarChart, IconExternalLink, IconSwap } from '@/components/Icons';
+import { IconArrowLeft, IconRefresh, IconTrendUp, IconTrendDown, IconMinus, IconShield, IconTarget, IconChart, IconCandlestick, IconNews, IconBarChart, IconExternalLink, IconSwap, IconStar, IconStarFilled } from '@/components/Icons';
+import { useWatchlist } from '@/hooks/useWatchlist';
 
 const KlineChart = dynamic(() => import('@/components/KlineChart'), { ssr: false });
 
@@ -31,6 +32,7 @@ export default function StockDetailPage() {
   const [error, setError] = useState('');
   const [chartType, setChartType] = useState<'daily' | '5min'>('daily');
   const [refreshing, setRefreshing] = useState(false);
+  const { isInWatchlist, toggleStock } = useWatchlist();
 
   const fetchData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -135,6 +137,16 @@ export default function StockDetailPage() {
             className={`btn-secondary p-2 rounded-lg ${refreshing ? 'animate-spin' : ''}`}
           >
             <IconRefresh size={18} />
+          </button>
+          <button
+            onClick={() => toggleStock(result.quote.code, result.quote.name)}
+            className="btn-secondary p-2 rounded-lg hover:scale-105 transition-transform"
+            title={isInWatchlist(result.quote.code) ? '取消收藏' : '加入自选'}
+          >
+            {isInWatchlist(result.quote.code)
+              ? <IconStarFilled size={18} className="text-yellow-400" />
+              : <IconStar size={18} />
+            }
           </button>
           <span className="text-[10px] sm:text-xs text-[var(--text-muted)] hidden sm:block">{result.quote.time}</span>
         </div>

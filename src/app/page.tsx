@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import type { AnalysisResult, KlineItem, NewsItem } from '@/types/stock';
 
@@ -20,6 +21,7 @@ interface FullAnalysis extends AnalysisResult {
 }
 
 export default function Home() {
+  const router = useRouter();
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<FullAnalysis | null>(null);
@@ -45,6 +47,12 @@ export default function Home() {
       setError('请求失败，请检查网络');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const goToDetail = () => {
+    if (result) {
+      router.push(`/stock/${result.quote.code}`);
     }
   };
 
@@ -94,7 +102,13 @@ export default function Home() {
             <div className="lg:col-span-2 p-4 sm:p-6 bg-gray-900 rounded-lg border border-gray-800">
               <div className="flex justify-between items-start mb-3 sm:mb-4">
                 <div>
-                  <h2 className="text-lg sm:text-2xl font-bold">{result.quote.name}</h2>
+                  <h2
+                    className="text-lg sm:text-2xl font-bold cursor-pointer hover:text-blue-400 transition-colors"
+                    onClick={goToDetail}
+                    title="查看详情"
+                  >
+                    {result.quote.name} →
+                  </h2>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span className="text-gray-400 text-xs sm:text-sm">{result.quote.code}</span>
                     <span className="text-gray-600 text-[10px] sm:text-xs">{result.quote.time}</span>

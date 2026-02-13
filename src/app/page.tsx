@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import type { AnalysisResult, KlineItem, NewsItem } from '@/types/stock';
+import { IconSearch, IconChart, IconTrendUp, IconTrendDown, IconMinus, IconShield, IconTarget, IconNews, IconExternalLink, IconBarChart, IconSwap, IconCandlestick } from '@/components/Icons';
 
 const KlineChart = dynamic(() => import('@/components/KlineChart'), { ssr: false });
 
@@ -56,114 +57,162 @@ export default function Home() {
     }
   };
 
+  const SignalIcon = ({ signal }: { signal: string }) => {
+    if (signal === 'bullish') return <IconTrendUp size={20} className="text-green-400" />;
+    if (signal === 'bearish') return <IconTrendDown size={20} className="text-red-400" />;
+    return <IconMinus size={20} className="text-yellow-400" />;
+  };
+
   const signalColor = (s: string) =>
     s === 'bullish' ? 'text-green-400' : s === 'bearish' ? 'text-red-400' : 'text-yellow-400';
-  const signalBg = (s: string) =>
-    s === 'bullish' ? 'border-green-800 bg-green-950/30' : s === 'bearish' ? 'border-red-800 bg-red-950/30' : 'border-yellow-800 bg-yellow-950/30';
+  const signalBorder = (s: string) =>
+    s === 'bullish' ? 'border-green-500/20' : s === 'bearish' ? 'border-red-500/20' : 'border-yellow-500/20';
   const signalText = (s: string) =>
-    s === 'bullish' ? '🟢 看多' : s === 'bearish' ? '🔴 看空' : '🟡 观望';
+    s === 'bullish' ? '看多' : s === 'bearish' ? '看空' : '观望';
   const priceColor = (v: number) => (v >= 0 ? 'text-red-400' : 'text-green-400');
 
   return (
-    <main className="max-w-6xl mx-auto px-3 py-4 sm:px-6 sm:py-6">
+    <main className="max-w-6xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4 sm:mb-6">
-        <h1 className="text-xl sm:text-3xl font-bold">📊 A股分析助手</h1>
-        <span className="text-[10px] sm:text-xs text-gray-500">数据来源：东方财富</span>
+      <div className="flex items-center justify-between mb-6 sm:mb-10 animate-fade-in-up">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
+            <IconChart size={20} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight">A股分析助手</h1>
+            <p className="text-[11px] sm:text-xs text-[var(--text-muted)]">实时行情 · 技术分析 · 操作建议</p>
+          </div>
+        </div>
+        <span className="text-[10px] sm:text-xs text-[var(--text-muted)] hidden sm:block">数据来源：东方财富</span>
       </div>
 
       {/* 搜索栏 */}
-      <div className="flex gap-2 sm:gap-3 mb-6 sm:mb-8">
-        <input
-          type="text"
-          inputMode="numeric"
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()}
-          placeholder="输入股票/基金代码"
-          className="flex-1 px-3 py-2.5 sm:px-4 sm:py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-blue-500 text-base sm:text-lg"
-        />
+      <div className="flex gap-3 mb-8 sm:mb-10 animate-fade-in-up delay-1">
+        <div className="relative flex-1">
+          <IconSearch size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+          <input
+            type="text"
+            inputMode="numeric"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()}
+            placeholder="输入股票/基金代码，如 600519"
+            className="input w-full pl-11 pr-4 py-3 sm:py-3.5 text-base sm:text-lg"
+          />
+        </div>
         <button
           onClick={handleAnalyze}
           disabled={loading}
-          className="px-5 py-2.5 sm:px-8 sm:py-3 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-lg font-bold text-base sm:text-lg transition-colors whitespace-nowrap"
+          className="btn-primary px-6 sm:px-8 py-3 sm:py-3.5 text-base sm:text-lg flex items-center gap-2"
         >
-          {loading ? '⏳' : '分析'}
+          {loading ? (
+            <span className="inline-block w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          ) : (
+            <>
+              <IconSearch size={18} />
+              <span className="hidden sm:inline">分析</span>
+            </>
+          )}
         </button>
       </div>
 
-      {error && <div className="p-3 sm:p-4 bg-red-900/50 border border-red-700 rounded-lg mb-4 sm:mb-6 text-red-200 text-sm">{error}</div>}
+      {/* 错误提示 */}
+      {error && (
+        <div className="card p-4 mb-6 border-red-500/20 animate-fade-in-up">
+          <p className="text-red-400 text-sm">{error}</p>
+        </div>
+      )}
 
+      {/* 分析结果 */}
       {result && (
-        <div className="space-y-4 sm:space-y-6">
+        <div className="space-y-5 sm:space-y-6">
           {/* 行情概览 + 信号 */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
             {/* 价格卡 */}
-            <div className="lg:col-span-2 p-4 sm:p-6 bg-gray-900 rounded-lg border border-gray-800">
-              <div className="flex justify-between items-start mb-3 sm:mb-4">
+            <div className="lg:col-span-2 card p-5 sm:p-6 animate-fade-in-up delay-1">
+              <div className="flex justify-between items-start mb-4 sm:mb-5">
                 <div>
                   <h2
-                    className="text-lg sm:text-2xl font-bold cursor-pointer hover:text-blue-400 transition-colors"
+                    className="text-lg sm:text-2xl font-bold cursor-pointer hover:text-blue-400 transition-colors flex items-center gap-2"
                     onClick={goToDetail}
-                    title="查看详情"
                   >
-                    {result.quote.name} →
+                    {result.quote.name}
+                    <span className="text-blue-500 text-sm">→</span>
                   </h2>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-gray-400 text-xs sm:text-sm">{result.quote.code}</span>
-                    <span className="text-gray-600 text-[10px] sm:text-xs">{result.quote.time}</span>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-[var(--text-muted)] text-xs sm:text-sm font-mono">{result.quote.code}</span>
+                    <span className="text-[var(--text-muted)] text-[10px] sm:text-xs opacity-60">{result.quote.time}</span>
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className={`text-2xl sm:text-4xl font-bold ${priceColor(result.quote.changePercent)}`}>
+                  <div className={`text-3xl sm:text-4xl font-bold tabular-nums ${priceColor(result.quote.changePercent)}`}>
                     {result.quote.price}
                   </div>
-                  <div className={`text-sm sm:text-lg ${priceColor(result.quote.changePercent)}`}>
-                    {result.quote.change > 0 ? '+' : ''}{result.quote.change} ({result.quote.changePercent > 0 ? '+' : ''}{result.quote.changePercent}%)
+                  <div className={`text-sm sm:text-base mt-0.5 font-medium tabular-nums ${priceColor(result.quote.changePercent)}`}>
+                    {result.quote.change > 0 ? '+' : ''}{result.quote.change}&ensp;
+                    {result.quote.changePercent > 0 ? '+' : ''}{result.quote.changePercent}%
                   </div>
                 </div>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 text-xs sm:text-sm">
-                <div className="text-gray-400">开盘 <span className="text-gray-200 ml-1">{result.quote.open}</span></div>
-                <div className="text-gray-400">最高 <span className="text-red-400 ml-1">{result.quote.high}</span></div>
-                <div className="text-gray-400">最低 <span className="text-green-400 ml-1">{result.quote.low}</span></div>
-                <div className="text-gray-400">成交额 <span className="text-gray-200 ml-1">{(result.quote.amount / 10000).toFixed(2)}亿</span></div>
-                {result.quote.turnover > 0 && (
-                  <div className="text-gray-400">换手率 <span className="text-gray-200 ml-1">{result.quote.turnover}%</span></div>
-                )}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+                {[
+                  { label: '开盘', value: result.quote.open, color: '' },
+                  { label: '最高', value: result.quote.high, color: 'text-red-400' },
+                  { label: '最低', value: result.quote.low, color: 'text-green-400' },
+                  { label: '成交额', value: `${(result.quote.amount / 10000).toFixed(2)}亿`, color: '' },
+                ].map((item) => (
+                  <div key={item.label} className="px-3 py-2.5 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-default)]">
+                    <div className="text-[var(--text-muted)] text-[11px] mb-0.5">{item.label}</div>
+                    <div className={`font-medium text-sm tabular-nums ${item.color || 'text-[var(--text-primary)]'}`}>{item.value}</div>
+                  </div>
+                ))}
               </div>
             </div>
 
             {/* 信号卡 */}
-            <div className={`p-4 sm:p-6 rounded-lg border ${signalBg(result.signal)}`}>
-              <h3 className={`text-xl sm:text-2xl font-bold mb-2 sm:mb-3 ${signalColor(result.signal)}`}>
-                {signalText(result.signal)}
-              </h3>
-              <p className="text-xs sm:text-sm text-gray-300 leading-relaxed">{result.suggestion}</p>
+            <div className={`card p-5 sm:p-6 ${signalBorder(result.signal)} animate-fade-in-up delay-2`}>
+              <div className="flex items-center gap-3 mb-3">
+                <div className={`signal-dot ${result.signal}`} />
+                <h3 className={`text-xl sm:text-2xl font-bold ${signalColor(result.signal)}`}>
+                  {signalText(result.signal)}
+                </h3>
+                <SignalIcon signal={result.signal} />
+              </div>
+              <p className="text-xs sm:text-sm text-[var(--text-secondary)] leading-relaxed">{result.suggestion}</p>
               {result.stopLoss && (
-                <div className="mt-3 sm:mt-4 flex gap-3 sm:gap-4 text-xs sm:text-sm">
-                  <span className="px-2 py-1 bg-green-900/50 rounded text-green-400">止损 {result.stopLoss}</span>
-                  <span className="px-2 py-1 bg-red-900/50 rounded text-red-400">止盈 {result.takeProfit}</span>
+                <div className="mt-4 flex gap-3 text-xs sm:text-sm">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/8 border border-green-500/15 text-green-400">
+                    <IconShield size={14} />
+                    止损 {result.stopLoss}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/8 border border-red-500/15 text-red-400">
+                    <IconTarget size={14} />
+                    止盈 {result.takeProfit}
+                  </span>
                 </div>
               )}
             </div>
           </div>
 
           {/* K线图 */}
-          <div className="p-3 sm:p-4 bg-gray-900 rounded-lg border border-gray-800">
-            <div className="flex gap-2 mb-2 sm:mb-3">
-              <button
-                onClick={() => setChartType('daily')}
-                className={`px-3 sm:px-4 py-1 sm:py-1.5 rounded text-xs sm:text-sm font-medium transition-colors ${chartType === 'daily' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-gray-200'}`}
-              >
-                日线
-              </button>
-              <button
-                onClick={() => setChartType('5min')}
-                className={`px-3 sm:px-4 py-1 sm:py-1.5 rounded text-xs sm:text-sm font-medium transition-colors ${chartType === '5min' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-gray-200'}`}
-              >
-                5分钟
-              </button>
+          <div className="card p-4 sm:p-5 animate-fade-in-up delay-3">
+            <div className="flex items-center gap-2 mb-3">
+              <IconCandlestick size={16} className="text-blue-400" />
+              <div className="flex gap-1.5">
+                <button
+                  onClick={() => setChartType('daily')}
+                  className={`btn-secondary px-3 py-1 text-xs sm:text-sm ${chartType === 'daily' ? 'active' : ''}`}
+                >
+                  日线
+                </button>
+                <button
+                  onClick={() => setChartType('5min')}
+                  className={`btn-secondary px-3 py-1 text-xs sm:text-sm ${chartType === '5min' ? 'active' : ''}`}
+                >
+                  5分钟
+                </button>
+              </div>
             </div>
             <KlineChart
               klines={chartType === 'daily' ? result.dailyKlines : result.min5Klines}
@@ -173,56 +222,76 @@ export default function Home() {
           </div>
 
           {/* 分析详情 + 指标 */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
             {/* 分析详情 */}
-            <div className="p-4 sm:p-6 bg-gray-900 rounded-lg border border-gray-800">
-              <h3 className="text-base sm:text-lg font-bold mb-2 sm:mb-3">📋 分析详情</h3>
-              <div className="space-y-1 sm:space-y-1.5 text-xs sm:text-sm text-gray-300">
+            <div className="card p-5 sm:p-6 animate-fade-in-up delay-4">
+              <h3 className="text-sm sm:text-base font-semibold mb-3 flex items-center gap-2">
+                <IconChart size={16} className="text-blue-400" />
+                分析详情
+              </h3>
+              <div className="space-y-1.5 text-xs sm:text-sm text-[var(--text-secondary)] leading-relaxed">
                 {result.summary.split('\n').filter(Boolean).map((line, i) => (
-                  <p key={i}>{line}</p>
+                  <p key={i} className={
+                    line.includes('📈') || line.includes('金叉') ? 'text-green-400' :
+                    line.includes('📉') || line.includes('死叉') ? 'text-red-400' :
+                    line.includes('⚠️') ? 'text-yellow-400' : ''
+                  }>{line}</p>
                 ))}
               </div>
             </div>
 
             {/* 技术指标 */}
-            <div className="p-4 sm:p-6 bg-gray-900 rounded-lg border border-gray-800">
-              <h3 className="text-base sm:text-lg font-bold mb-2 sm:mb-3">📈 技术指标</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 text-xs sm:text-sm">
-                <div>
-                  <div className="text-gray-500 mb-1 font-medium">均线</div>
-                  <div>MA5: <span className="text-yellow-400">{result.indicators.ma.ma5}</span></div>
-                  <div>MA10: <span className="text-blue-400">{result.indicators.ma.ma10}</span></div>
-                  <div>MA20: <span className="text-purple-400">{result.indicators.ma.ma20}</span></div>
-                  <div>MA60: <span className="text-cyan-400">{result.indicators.ma.ma60}</span></div>
+            <div className="card p-5 sm:p-6 animate-fade-in-up delay-5">
+              <h3 className="text-sm sm:text-base font-semibold mb-3 flex items-center gap-2">
+                <IconBarChart size={16} className="text-blue-400" />
+                技术指标
+              </h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3 text-xs sm:text-sm">
+                <div className="space-y-1">
+                  <div className="text-[var(--text-muted)] text-[11px] font-medium uppercase tracking-wider">均线</div>
+                  <div className="tabular-nums">MA5: <span className="text-yellow-400">{result.indicators.ma.ma5}</span></div>
+                  <div className="tabular-nums">MA10: <span className="text-blue-400">{result.indicators.ma.ma10}</span></div>
+                  <div className="tabular-nums">MA20: <span className="text-purple-400">{result.indicators.ma.ma20}</span></div>
+                  <div className="tabular-nums">MA60: <span className="text-cyan-400">{result.indicators.ma.ma60}</span></div>
                 </div>
-                <div>
-                  <div className="text-gray-500 mb-1 font-medium">MACD</div>
-                  <div>DIF: {result.indicators.macd.dif}</div>
-                  <div>DEA: {result.indicators.macd.dea}</div>
-                  <div>柱: <span className={result.indicators.macd.histogram >= 0 ? 'text-red-400' : 'text-green-400'}>{result.indicators.macd.histogram}</span></div>
+                <div className="space-y-1">
+                  <div className="text-[var(--text-muted)] text-[11px] font-medium uppercase tracking-wider">MACD</div>
+                  <div className="tabular-nums">DIF: <span className={result.indicators.macd.dif >= 0 ? 'text-red-400' : 'text-green-400'}>{result.indicators.macd.dif}</span></div>
+                  <div className="tabular-nums">DEA: <span className={result.indicators.macd.dea >= 0 ? 'text-red-400' : 'text-green-400'}>{result.indicators.macd.dea}</span></div>
+                  <div className="tabular-nums">柱: <span className={result.indicators.macd.histogram >= 0 ? 'text-red-400' : 'text-green-400'}>{result.indicators.macd.histogram}</span></div>
                 </div>
-                <div>
-                  <div className="text-gray-500 mb-1 font-medium">RSI</div>
-                  <div>RSI6: <span className={result.indicators.rsi.rsi6 > 70 ? 'text-red-400' : result.indicators.rsi.rsi6 < 30 ? 'text-green-400' : ''}>{result.indicators.rsi.rsi6}</span></div>
-                  <div>RSI12: {result.indicators.rsi.rsi12}</div>
-                  <div>RSI24: {result.indicators.rsi.rsi24}</div>
+                <div className="space-y-1">
+                  <div className="text-[var(--text-muted)] text-[11px] font-medium uppercase tracking-wider">RSI</div>
+                  <div className="tabular-nums">RSI6: <span className={result.indicators.rsi.rsi6 > 70 ? 'text-red-400' : result.indicators.rsi.rsi6 < 30 ? 'text-green-400' : ''}>{result.indicators.rsi.rsi6}</span></div>
+                  <div className="tabular-nums">RSI12: {result.indicators.rsi.rsi12}</div>
+                  <div className="tabular-nums">RSI24: {result.indicators.rsi.rsi24}</div>
                 </div>
-                <div>
-                  <div className="text-gray-500 mb-1 font-medium">KDJ</div>
-                  <div>K: {result.indicators.kdj.k}</div>
-                  <div>D: {result.indicators.kdj.d}</div>
-                  <div>J: <span className={result.indicators.kdj.j > 100 ? 'text-red-400' : result.indicators.kdj.j < 0 ? 'text-green-400' : ''}>{result.indicators.kdj.j}</span></div>
+                <div className="space-y-1">
+                  <div className="text-[var(--text-muted)] text-[11px] font-medium uppercase tracking-wider">KDJ</div>
+                  <div className="tabular-nums">K: {result.indicators.kdj.k}</div>
+                  <div className="tabular-nums">D: {result.indicators.kdj.d}</div>
+                  <div className="tabular-nums">J: <span className={result.indicators.kdj.j > 100 ? 'text-red-400' : result.indicators.kdj.j < 0 ? 'text-green-400' : ''}>{result.indicators.kdj.j}</span></div>
                 </div>
-                <div>
-                  <div className="text-gray-500 mb-1 font-medium">布林带</div>
-                  <div>上轨: {result.indicators.boll.upper}</div>
-                  <div>中轨: {result.indicators.boll.middle}</div>
-                  <div>下轨: {result.indicators.boll.lower}</div>
+                <div className="space-y-1">
+                  <div className="text-[var(--text-muted)] text-[11px] font-medium uppercase tracking-wider">布林带</div>
+                  <div className="tabular-nums">上: <span className="text-orange-400">{result.indicators.boll.upper}</span></div>
+                  <div className="tabular-nums">中: <span className="text-orange-300">{result.indicators.boll.middle}</span></div>
+                  <div className="tabular-nums">下: <span className="text-orange-400">{result.indicators.boll.lower}</span></div>
                 </div>
-                <div>
-                  <div className="text-gray-500 mb-1 font-medium">风控</div>
-                  <div>ATR: {result.indicators.atr}</div>
-                  {result.quote.turnover > 0 && <div>换手: {result.quote.turnover}%</div>}
+                <div className="space-y-1">
+                  <div className="text-[var(--text-muted)] text-[11px] font-medium uppercase tracking-wider">风控</div>
+                  <div className="tabular-nums">ATR: {result.indicators.atr}</div>
+                  {result.quote.turnover > 0 && (
+                    <div className="flex items-center gap-1 tabular-nums">
+                      <IconSwap size={12} className="text-[var(--text-muted)]" />
+                      {result.quote.turnover}%
+                    </div>
+                  )}
+                  <div className="mt-1">
+                    <span className={`indicator-tag ${result.indicators.rsi.rsi6 > 70 ? 'overbought' : result.indicators.rsi.rsi6 < 30 ? 'oversold' : 'normal'}`}>
+                      {result.indicators.rsi.rsi6 > 70 ? '超买' : result.indicators.rsi.rsi6 < 30 ? '超卖' : '正常'}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -230,30 +299,48 @@ export default function Home() {
 
           {/* 资讯 */}
           {result.news && result.news.length > 0 && (
-            <div className="p-4 sm:p-6 bg-gray-900 rounded-lg border border-gray-800">
-              <h3 className="text-base sm:text-lg font-bold mb-2 sm:mb-3">📰 最新资讯</h3>
-              <div className="space-y-2 sm:space-y-3">
+            <div className="card p-5 sm:p-6 animate-fade-in-up delay-5">
+              <h3 className="text-sm sm:text-base font-semibold mb-3 flex items-center gap-2">
+                <IconNews size={16} className="text-blue-400" />
+                最新资讯
+              </h3>
+              <div className="space-y-2">
                 {result.news.map((item: NewsItem, i: number) => (
                   <a
                     key={i}
                     href={item.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="block p-2.5 sm:p-3 bg-gray-800/50 rounded hover:bg-gray-800 active:bg-gray-700 transition-colors"
+                    className="flex items-start gap-3 p-3 rounded-xl bg-[var(--bg-secondary)]/50 border border-[var(--border-default)] hover:border-[var(--border-hover)] hover:bg-[var(--bg-card-hover)] transition-all duration-200 group"
                   >
-                    <div className="flex justify-between items-start gap-2 sm:gap-4">
-                      <h4 className="text-xs sm:text-sm text-gray-200 font-medium leading-snug">{item.title}</h4>
-                      <span className="text-[10px] sm:text-xs text-gray-500 whitespace-nowrap shrink-0">{item.time}</span>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-xs sm:text-sm text-[var(--text-primary)] font-medium leading-snug group-hover:text-blue-400 transition-colors line-clamp-1">{item.title}</h4>
+                      {item.summary && (
+                        <p className="text-[10px] sm:text-xs text-[var(--text-muted)] mt-1 line-clamp-1">{item.summary}</p>
+                      )}
+                      <div className="flex items-center gap-2 mt-1.5 text-[10px] text-[var(--text-muted)]">
+                        <span>{item.source}</span>
+                        <span>·</span>
+                        <span>{item.time}</span>
+                      </div>
                     </div>
-                    {item.summary && (
-                      <p className="text-[10px] sm:text-xs text-gray-500 mt-1 line-clamp-2">{item.summary}</p>
-                    )}
-                    <span className="text-[10px] sm:text-xs text-gray-600 mt-1 inline-block">{item.source}</span>
+                    <IconExternalLink size={14} className="text-[var(--text-muted)] group-hover:text-blue-400 transition-colors mt-1 shrink-0" />
                   </a>
                 ))}
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* 空状态 */}
+      {!result && !error && !loading && (
+        <div className="text-center py-16 sm:py-24 animate-fade-in-up delay-2">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-blue-500/10 border border-blue-500/15 flex items-center justify-center">
+            <IconCandlestick size={28} className="text-blue-400" />
+          </div>
+          <p className="text-[var(--text-muted)] text-sm sm:text-base">输入股票代码开始分析</p>
+          <p className="text-[var(--text-muted)] text-xs sm:text-sm mt-1 opacity-60">支持 A 股、ETF、LOF</p>
         </div>
       )}
     </main>

@@ -1,6 +1,6 @@
 // 技术分析引擎 — MACD / RSI / KDJ / BOLL / MA / ATR
 
-import { KlineItem, TechnicalIndicators } from '@/types/stock';
+import { KlineItem, TechnicalIndicators, DivergenceInfo } from '@/types/stock';
 
 // ============ 移动平均线 ============
 
@@ -166,6 +166,124 @@ function calcATR(klines: KlineItem[], period = 14): number[] {
   return atr;
 }
 
+// ============ OBV（能量潮）============
+
+function calcOBV(klines: KlineItem[]): number[] {
+  const obv: number[] = [0];
+  for (let i = 1; i < klines.length; i++) {
+    if (klines[i].close > klines[i - 1].close) {
+      obv.push(obv[i - 1] + klines[i].volume);
+    } else if (klines[i].close < klines[i - 1].close) {
+      obv.push(obv[i - 1] - klines[i].volume);
+    } else {
+      obv.push(obv[i - 1]);
+    }
+  }
+  return obv;
+}
+
+// ============ 量比 ============
+
+function calcVolumeRatio(klines: KlineItem[], period = 5): number {
+  const last = klines.length - 1;
+  if (last < period) return 1;
+  const avgVol = klines.slice(last - period, last).reduce((s, k) => s + k.volume, 0) / period;
+  return avgVol > 0 ? +(klines[last].volume / avgVol).toFixed(2) : 1;
+}
+
+// ============ 背离检测 ============
+
+function findPeaks(data: number[], isTop: boolean, minDist = 5): { index: number; value: number }[] {
+  const peaks: { index: number; value: number }[] = [];
+  for (let i = 2; i < data.length - 2; i++) {
+    if (isNaN(data[i])) continue;
+    if (isTop) {
+      if (data[i] > data[i - 1] && data[i] > data[i - 2] && data[i] > data[i + 1] && data[i] > data[i + 2]) {
+        if (peaks.length === 0 || i - peaks[peaks.length - 1].index >= minDist) {
+          peaks.push({ index: i, value: data[i] });
+        }
+      }
+    } else {
+      if (data[i] < data[i - 1] && data[i] < data[i - 2] && data[i] < data[i + 1] && data[i] < data[i + 2]) {
+        if (peaks.length === 0 || i - peaks[peaks.length - 1].index >= minDist) {
+          peaks.push({ index: i, value: data[i] });
+        }
+      }
+    }
+  }
+  return peaks;
+}
+
+function detectDivergence(klines: KlineItem[], macdDif: number[], rsi6: number[]): DivergenceInfo {
+  const closes = klines.map((k) => k.close);
+  const description: string[] = [];
+  let macdDiv: 'top' | 'bottom' | null = null;
+  let rsiDiv: 'top' | 'bottom' | null = null;
+
+  // 只看最近 60 根K线
+  const lookback = Math.min(60, closes.length);
+  const startIdx = closes.length - lookback;
+  const recentCloses = closes.slice(startIdx);
+  const recentDif = macdDif.slice(startIdx);
+  const recentRsi = rsi6.slice(startIdx);
+
+  // MACD 顶背离：价格创新高，DIF 没创新高
+  const priceHighs = findPeaks(recentCloses, true);
+  const difHighs = findPeaks(recentDif, true);
+  if (priceHighs.length >= 2 && difHighs.length >= 2) {
+    const p1 = priceHighs[priceHighs.length - 2];
+    const p2 = priceHighs[priceHighs.length - 1];
+    const d1 = difHighs[difHighs.length - 2];
+    const d2 = difHighs[difHighs.length - 1];
+    if (p2.value > p1.value && d2.value < d1.value) {
+      macdDiv = 'top';
+      description.push('⚠️ MACD 顶背离：价格创新高但 MACD 动能减弱，注意回调风险');
+    }
+  }
+
+  // MACD 底背离：价格创新低，DIF 没创新低
+  const priceLows = findPeaks(recentCloses, false);
+  const difLows = findPeaks(recentDif, false);
+  if (priceLows.length >= 2 && difLows.length >= 2) {
+    const p1 = priceLows[priceLows.length - 2];
+    const p2 = priceLows[priceLows.length - 1];
+    const d1 = difLows[difLows.length - 2];
+    const d2 = difLows[difLows.length - 1];
+    if (p2.value < p1.value && d2.value > d1.value) {
+      macdDiv = 'bottom';
+      description.push('💡 MACD 底背离：价格创新低但 MACD 动能增强，可能反弹');
+    }
+  }
+
+  // RSI 顶背离
+  const rsiHighs = findPeaks(recentRsi, true);
+  if (priceHighs.length >= 2 && rsiHighs.length >= 2) {
+    const p1 = priceHighs[priceHighs.length - 2];
+    const p2 = priceHighs[priceHighs.length - 1];
+    const r1 = rsiHighs[rsiHighs.length - 2];
+    const r2 = rsiHighs[rsiHighs.length - 1];
+    if (p2.value > p1.value && r2.value < r1.value) {
+      rsiDiv = 'top';
+      description.push('⚠️ RSI 顶背离：价格新高但 RSI 走弱');
+    }
+  }
+
+  // RSI 底背离
+  const rsiLows = findPeaks(recentRsi, false);
+  if (priceLows.length >= 2 && rsiLows.length >= 2) {
+    const p1 = priceLows[priceLows.length - 2];
+    const p2 = priceLows[priceLows.length - 1];
+    const r1 = rsiLows[rsiLows.length - 2];
+    const r2 = rsiLows[rsiLows.length - 1];
+    if (p2.value < p1.value && r2.value > r1.value) {
+      rsiDiv = 'bottom';
+      description.push('💡 RSI 底背离：价格新低但 RSI 走强');
+    }
+  }
+
+  return { macd: macdDiv, rsi: rsiDiv, description };
+}
+
 // ============ 综合计算 ============
 
 export function calculateIndicators(klines: KlineItem[]): TechnicalIndicators {
@@ -185,6 +303,9 @@ export function calculateIndicators(klines: KlineItem[]): TechnicalIndicators {
   const kdj = calcKDJ(klines);
   const boll = calcBOLL(closes);
   const atr = calcATR(klines);
+  const obv = calcOBV(klines);
+  const volumeRatio = calcVolumeRatio(klines);
+  const divergence = detectDivergence(klines, macd.dif, rsi6);
 
   return {
     ma: {
@@ -215,6 +336,9 @@ export function calculateIndicators(klines: KlineItem[]): TechnicalIndicators {
       lower: boll.lower[last],
     },
     atr: atr[last],
+    obv: obv[last],
+    volumeRatio,
+    divergence,
   };
 }
 

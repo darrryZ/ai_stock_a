@@ -93,27 +93,18 @@ export default function Home() {
     return () => clearInterval(timer);
   }, []);
 
-  // 自选股行情刷新
+  // 自选股行情刷新（批量接口）
   useEffect(() => {
     if (!watchlistLoaded || watchlist.length === 0) return;
     const fetchWatchlistQuotes = async () => {
-      const quotes: Record<string, { price: number; changePercent: number; change: number }> = {};
-      await Promise.all(
-        watchlist.map(async (item) => {
-          try {
-            const res = await fetch(`/api/quote?code=${item.code}`);
-            const data = await res.json();
-            if (data.quote) {
-              quotes[item.code] = {
-                price: data.quote.price,
-                changePercent: data.quote.changePercent,
-                change: data.quote.change,
-              };
-            }
-          } catch { /* ignore */ }
-        })
-      );
-      setWatchlistQuotes(quotes);
+      try {
+        const codes = watchlist.map((item) => item.code).join(',');
+        const res = await fetch(`/api/batch-quote?codes=${codes}`);
+        const data = await res.json();
+        if (data.quotes) {
+          setWatchlistQuotes(data.quotes);
+        }
+      } catch { /* ignore */ }
     };
     fetchWatchlistQuotes();
     const timer = setInterval(fetchWatchlistQuotes, 30000);

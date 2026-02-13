@@ -1,6 +1,7 @@
 // 行情数据获取 — 东方财富（UTF-8，无编码问题）
 
 import { StockQuote, KlineItem, normalizeCode } from '@/types/stock';
+import { apiCache } from './cache';
 
 const EAST_QUOTE_URL = 'https://push2.eastmoney.com/api/qt/stock/get';
 const EAST_KLINE_URL = 'https://push2his.eastmoney.com/api/qt/stock/kline/get';
@@ -18,6 +19,12 @@ function toEastSecid(code: string): string {
 
 export async function getQuote(rawCode: string): Promise<StockQuote> {
   const code = normalizeCode(rawCode);
+
+  // 缓存检查
+  const cacheKey = `quote:${code}`;
+  const cached = apiCache.get<StockQuote>(cacheKey);
+  if (cached) return cached;
+
   const secid = toEastSecid(code);
 
   const params = new URLSearchParams({
@@ -51,7 +58,7 @@ export async function getQuote(rawCode: string): Promise<StockQuote> {
   const change = d.f171 / divisor;
   const turnover = d.f168 / 100; // 换手率
 
-  return {
+  const result: StockQuote = {
     code,
     name: d.f58 || d.f57 || rawCode,
     price,
@@ -66,6 +73,9 @@ export async function getQuote(rawCode: string): Promise<StockQuote> {
     turnover: +turnover.toFixed(2),
     time: new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }),
   };
+
+  apiCache.set(cacheKey, result);
+  return result;
 }
 
 // ============ K线数据（东方财富） ============
@@ -84,6 +94,11 @@ export async function getKlines(
 ): Promise<KlineItem[]> {
   const secid = toEastSecid(rawCode);
   const klt = PERIOD_MAP[period];
+
+  // 缓存检查
+  const cacheKey = `kline:${rawCode}:${period}:${limit}`;
+  const cached = apiCache.get<KlineItem[]>(cacheKey);
+  if (cached) return cached;
 
   const params = new URLSearchParams({
     secid,
@@ -104,7 +119,7 @@ export async function getKlines(
   const json = await res.json();
   if (!json.data?.klines) throw new Error(`无法获取K线数据: ${rawCode}`);
 
-  return json.data.klines.map((line: string) => {
+  const klines = json.data.klines.map((line: string) => {
     const [date, open, close, high, low, volume, amount] = line.split(',');
     return {
       date,
@@ -116,4 +131,7 @@ export async function getKlines(
       amount: parseFloat(amount),
     };
   });
+
+  apiCache.set(cacheKey, klines);
+  return klines;
 }

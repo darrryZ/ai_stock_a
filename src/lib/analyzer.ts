@@ -79,7 +79,7 @@ function analyzeTiming(ind: TechnicalIndicators): SignalScore {
   const details: string[] = [];
 
   // RSI
-  const { rsi6, rsi12 } = ind.rsi;
+  const { rsi6 } = ind.rsi;
   if (rsi6 > 80) {
     score -= 15;
     details.push(`⚠️ RSI6=${rsi6}，严重超买`);
@@ -111,6 +111,65 @@ function analyzeTiming(ind: TechnicalIndicators): SignalScore {
   } else if (k < d && j < 100) {
     score -= 5;
     details.push('KDJ死叉');
+  }
+
+  // 量比
+  if (ind.volumeRatio !== undefined) {
+    if (ind.volumeRatio > 3) {
+      details.push(`📊 量比=${ind.volumeRatio}，成交异常放大`);
+      // 放量方向跟随趋势加分
+    } else if (ind.volumeRatio > 1.5) {
+      details.push(`📊 量比=${ind.volumeRatio}，温和放量`);
+    } else if (ind.volumeRatio < 0.5) {
+      details.push(`📊 量比=${ind.volumeRatio}，明显缩量`);
+    }
+  }
+
+  // 背离信号
+  if (ind.divergence) {
+    if (ind.divergence.macd === 'top') {
+      score -= 15;
+    } else if (ind.divergence.macd === 'bottom') {
+      score += 15;
+    }
+    if (ind.divergence.rsi === 'top') {
+      score -= 10;
+    } else if (ind.divergence.rsi === 'bottom') {
+      score += 10;
+    }
+    details.push(...ind.divergence.description);
+  }
+
+  return { score, details };
+}
+
+// ============ 第二点五层：量价验证 ============
+
+function analyzeVolume(ind: TechnicalIndicators, quote: StockQuote): SignalScore {
+  let score = 0;
+  const details: string[] = [];
+
+  const vr = ind.volumeRatio ?? 1;
+
+  // 涨 + 放量 = 强势确认
+  if (quote.changePercent > 1 && vr > 1.5) {
+    score += 10;
+    details.push('上涨放量，多头力量充足');
+  }
+  // 涨 + 缩量 = 上涨乏力
+  if (quote.changePercent > 1 && vr < 0.7) {
+    score -= 5;
+    details.push('上涨缩量，追高需谨慎');
+  }
+  // 跌 + 放量 = 恐慌
+  if (quote.changePercent < -1 && vr > 2) {
+    score -= 15;
+    details.push('下跌放量，空头主导');
+  }
+  // 跌 + 缩量 = 惜售
+  if (quote.changePercent < -1 && vr < 0.7) {
+    score += 5;
+    details.push('下跌缩量，抛压减轻');
   }
 
   return { score, details };
@@ -180,9 +239,10 @@ export function analyzeStock(
 
   const trend = analyzeTrend(indicators, quote);
   const timing = analyzeTiming(indicators);
+  const volume = analyzeVolume(indicators, quote);
   const risk = analyzeRisk(indicators, quote);
 
-  const totalScore = trend.score + timing.score;
+  const totalScore = trend.score + timing.score + volume.score;
   const signal = deriveSignal(totalScore);
 
   return {
@@ -190,7 +250,7 @@ export function analyzeStock(
     indicators,
     klines,
     signal,
-    summary: generateSummary(signal, trend.details, timing.details, risk.details),
+    summary: generateSummary(signal, trend.details, timing.details, [...volume.details, ...risk.details]),
     suggestion: generateSuggestion(signal, risk.stopLoss, risk.takeProfit),
     stopLoss: risk.stopLoss,
     takeProfit: risk.takeProfit,

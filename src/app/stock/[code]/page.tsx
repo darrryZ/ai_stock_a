@@ -3,8 +3,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import type { AnalysisResult, KlineItem, NewsItem } from '@/types/stock';
-import { IconArrowLeft, IconRefresh, IconTrendUp, IconTrendDown, IconMinus, IconShield, IconTarget, IconChart, IconCandlestick, IconNews, IconBarChart, IconExternalLink, IconSwap, IconStar, IconStarFilled } from '@/components/Icons';
+import type { AnalysisResult, KlineItem, NewsItem, MoneyFlow, BacktestResult, BacktestTrade } from '@/types/stock';
+import { IconArrowLeft, IconRefresh, IconTrendUp, IconTrendDown, IconMinus, IconShield, IconTarget, IconChart, IconCandlestick, IconNews, IconBarChart, IconExternalLink, IconSwap, IconStar, IconStarFilled, IconActivity } from '@/components/Icons';
 import { useWatchlist } from '@/hooks/useWatchlist';
 
 const KlineChart = dynamic(() => import('@/components/KlineChart'), { ssr: false });
@@ -20,6 +20,8 @@ interface FullAnalysis extends AnalysisResult {
     macd: { dif: number[]; dea: number[]; histogram: number[] };
     boll: { upper: number[]; middle: number[]; lower: number[] };
   };
+  moneyFlow?: MoneyFlow;
+  backtest?: BacktestResult;
 }
 
 export default function StockDetailPage() {
@@ -310,6 +312,111 @@ export default function StockDetailPage() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* 资金流向 + 回测 */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
+          {/* 资金流向 */}
+          {result.moneyFlow && (
+            <div className="card p-5 sm:p-6 animate-fade-in-up delay-4">
+              <h3 className="text-sm sm:text-base font-semibold mb-4 flex items-center gap-2">
+                <IconActivity size={16} className="text-blue-400" />
+                资金流向
+              </h3>
+              <div className="space-y-3">
+                {/* 主力 vs 散户 */}
+                <div className="flex items-center justify-between p-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-default)]">
+                  <span className="text-xs text-[var(--text-muted)]">主力净流入</span>
+                  <span className={`text-sm font-bold tabular-nums ${result.moneyFlow.mainNet >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                    {result.moneyFlow.mainNet >= 0 ? '+' : ''}{result.moneyFlow.mainNet.toFixed(2)} 万
+                  </span>
+                </div>
+                {/* 净流入柱状条 */}
+                <div className="space-y-2">
+                  {[
+                    { label: '超大单', value: result.moneyFlow.superLargeNet },
+                    { label: '大单', value: result.moneyFlow.largeNet },
+                    { label: '中单', value: result.moneyFlow.mediumNet },
+                    { label: '小单', value: result.moneyFlow.smallNet },
+                  ].map((item) => {
+                    const maxAbs = Math.max(
+                      Math.abs(result.moneyFlow!.superLargeNet),
+                      Math.abs(result.moneyFlow!.largeNet),
+                      Math.abs(result.moneyFlow!.mediumNet),
+                      Math.abs(result.moneyFlow!.smallNet),
+                      1,
+                    );
+                    const pct = Math.min(Math.abs(item.value) / maxAbs * 100, 100);
+                    return (
+                      <div key={item.label} className="flex items-center gap-2">
+                        <span className="text-[10px] text-[var(--text-muted)] w-10 shrink-0">{item.label}</span>
+                        <div className="flex-1 h-4 bg-[var(--bg-secondary)] rounded-full overflow-hidden relative">
+                          <div
+                            className={`h-full rounded-full transition-all ${item.value >= 0 ? 'bg-red-500/60' : 'bg-green-500/60'}`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <span className={`text-[10px] tabular-nums w-20 text-right ${item.value >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                          {item.value >= 0 ? '+' : ''}{(item.value / 10000).toFixed(2)}亿
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center justify-between p-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-default)]">
+                  <span className="text-xs text-[var(--text-muted)]">散户净流入</span>
+                  <span className={`text-sm font-bold tabular-nums ${result.moneyFlow.retailNet >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                    {result.moneyFlow.retailNet >= 0 ? '+' : ''}{result.moneyFlow.retailNet.toFixed(2)} 万
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 历史回测 */}
+          {result.backtest && result.backtest.totalTrades > 0 && (
+            <div className="card p-5 sm:p-6 animate-fade-in-up delay-4">
+              <h3 className="text-sm sm:text-base font-semibold mb-4 flex items-center gap-2">
+                <IconBarChart size={16} className="text-blue-400" />
+                策略回测 <span className="text-[10px] text-[var(--text-muted)] font-normal">（近120日）</span>
+              </h3>
+              {/* 统计概览 */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+                {[
+                  { label: '胜率', value: `${result.backtest.winRate}%`, color: result.backtest.winRate >= 50 ? 'text-red-400' : 'text-green-400' },
+                  { label: '总收益', value: `${result.backtest.totalReturn >= 0 ? '+' : ''}${result.backtest.totalReturn}%`, color: result.backtest.totalReturn >= 0 ? 'text-red-400' : 'text-green-400' },
+                  { label: '最大回撤', value: `-${result.backtest.maxDrawdown}%`, color: 'text-yellow-400' },
+                  { label: '夏普比率', value: `${result.backtest.sharpeRatio}`, color: result.backtest.sharpeRatio >= 1 ? 'text-red-400' : 'text-[var(--text-secondary)]' },
+                ].map((stat) => (
+                  <div key={stat.label} className="px-3 py-2.5 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-default)] text-center">
+                    <div className="text-[10px] text-[var(--text-muted)] mb-1">{stat.label}</div>
+                    <div className={`text-sm font-bold tabular-nums ${stat.color}`}>{stat.value}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center gap-4 text-xs text-[var(--text-muted)] mb-3">
+                <span>交易 {result.backtest.totalTrades} 次</span>
+                <span className="text-red-400">盈 {result.backtest.winTrades}</span>
+                <span className="text-green-400">亏 {result.backtest.loseTrades}</span>
+                <span>均收益 {result.backtest.avgReturn}%</span>
+              </div>
+              {/* 最近交易 */}
+              {result.backtest.trades.length > 0 && (
+                <div className="space-y-1.5">
+                  <div className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider mb-1">最近交易</div>
+                  {result.backtest.trades.map((t: BacktestTrade, i: number) => (
+                    <div key={i} className="flex items-center justify-between text-[10px] sm:text-xs px-2 py-1.5 rounded bg-[var(--bg-secondary)]/50">
+                      <span className="text-[var(--text-muted)] tabular-nums">{t.buyDate.slice(5)} → {t.sellDate.slice(5)}</span>
+                      <span className="text-[var(--text-muted)] truncate mx-2 max-w-[120px]">{t.signal}</span>
+                      <span className={`font-medium tabular-nums ${t.returnPct >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                        {t.returnPct >= 0 ? '+' : ''}{t.returnPct}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* 资讯 */}

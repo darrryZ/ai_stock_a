@@ -33,18 +33,63 @@ export interface TechnicalIndicators {
   kdj: { k: number; d: number; j: number };
   boll: { upper: number; middle: number; lower: number };
   atr: number;
+  obv?: number;                 // 量价指标
+  volumeRatio?: number;         // 量比
+  divergence?: DivergenceInfo;  // 背离信息
+}
+
+export interface DivergenceInfo {
+  macd?: 'top' | 'bottom' | null;   // MACD 顶/底背离
+  rsi?: 'top' | 'bottom' | null;
+  description: string[];
 }
 
 export interface AnalysisResult {
   quote: StockQuote;
   indicators: TechnicalIndicators;
   klines: KlineItem[];
-  signal: 'bullish' | 'bearish' | 'neutral';  // 看多/看空/观望
-  summary: string;        // 分析摘要
-  suggestion: string;     // 操作建议
-  stopLoss?: number;      // 止损位
-  takeProfit?: number;    // 止盈位
-  news: NewsItem[];       // 相关资讯
+  signal: 'bullish' | 'bearish' | 'neutral';
+  summary: string;
+  suggestion: string;
+  stopLoss?: number;
+  takeProfit?: number;
+  news: NewsItem[];
+  moneyFlow?: MoneyFlow;      // 资金流向
+  backtest?: BacktestResult;  // 历史回测
+}
+
+export interface MoneyFlow {
+  mainInflow: number;     // 主力流入（万元）
+  mainOutflow: number;    // 主力流出（万元）
+  mainNet: number;        // 主力净流入（万元）
+  retailInflow: number;   // 散户流入
+  retailOutflow: number;  // 散户流出
+  retailNet: number;      // 散户净流入
+  superLargeNet: number;  // 超大单净流入
+  largeNet: number;       // 大单净流入
+  mediumNet: number;      // 中单净流入
+  smallNet: number;       // 小单净流入
+}
+
+export interface BacktestResult {
+  totalTrades: number;    // 总交易次数
+  winTrades: number;      // 盈利次数
+  loseTrades: number;     // 亏损次数
+  winRate: number;        // 胜率 %
+  totalReturn: number;    // 总收益 %
+  maxDrawdown: number;    // 最大回撤 %
+  sharpeRatio: number;    // 夏普比率（简化）
+  avgReturn: number;      // 平均每笔收益 %
+  trades: BacktestTrade[];
+}
+
+export interface BacktestTrade {
+  buyDate: string;
+  buyPrice: number;
+  sellDate: string;
+  sellPrice: number;
+  returnPct: number;     // 收益率 %
+  signal: string;        // 触发信号
 }
 
 export interface NewsItem {

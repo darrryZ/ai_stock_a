@@ -49,40 +49,75 @@ body {
   position: relative;
 }
 
-/* 动态渐变网格背景 */
+/* 动态渐变背景 — 多层叠加 */
 body::before {
   content: '';
   position: fixed;
   inset: 0;
   background:
-    linear-gradient(135deg, rgba(59, 130, 246, 0.03) 0%, transparent 50%, rgba(59, 130, 246, 0.02) 100%),
-    linear-gradient(225deg, rgba(99, 102, 241, 0.03) 0%, transparent 50%);
+    radial-gradient(ellipse 80% 60% at 20% 10%, rgba(59, 130, 246, 0.08) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 80% at 80% 90%, rgba(99, 102, 241, 0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 50% at 50% 50%, rgba(59, 130, 246, 0.03) 0%, transparent 70%);
   z-index: 0;
   pointer-events: none;
+  animation: gradientShift 20s ease-in-out infinite;
 }
 
-/* 动态光线扫描效果 */
+@keyframes gradientShift {
+  0%, 100% {
+    background:
+      radial-gradient(ellipse 80% 60% at 20% 10%, rgba(59, 130, 246, 0.08) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 80% at 80% 90%, rgba(99, 102, 241, 0.06) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 50% at 50% 50%, rgba(59, 130, 246, 0.03) 0%, transparent 70%);
+  }
+  33% {
+    background:
+      radial-gradient(ellipse 70% 70% at 70% 20%, rgba(59, 130, 246, 0.07) 0%, transparent 60%),
+      radial-gradient(ellipse 80% 60% at 20% 80%, rgba(99, 102, 241, 0.05) 0%, transparent 60%),
+      radial-gradient(ellipse 40% 60% at 60% 40%, rgba(37, 99, 235, 0.04) 0%, transparent 70%);
+  }
+  66% {
+    background:
+      radial-gradient(ellipse 60% 80% at 40% 80%, rgba(59, 130, 246, 0.06) 0%, transparent 60%),
+      radial-gradient(ellipse 70% 50% at 80% 20%, rgba(99, 102, 241, 0.07) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 40% at 30% 50%, rgba(37, 99, 235, 0.05) 0%, transparent 70%);
+  }
+}
+
+/* 流动光线扫描 */
 body::after {
   content: '';
   position: fixed;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: linear-gradient(
-    to bottom right,
-    transparent 45%,
-    rgba(59, 130, 246, 0.015) 50%,
-    transparent 55%
-  );
-  animation: lightSweep 12s ease-in-out infinite;
+  top: -100%;
+  left: -100%;
+  width: 300%;
+  height: 300%;
+  background:
+    linear-gradient(
+      135deg,
+      transparent 40%,
+      rgba(59, 130, 246, 0.02) 45%,
+      rgba(59, 130, 246, 0.04) 50%,
+      rgba(59, 130, 246, 0.02) 55%,
+      transparent 60%
+    );
+  animation: lightSweep 8s ease-in-out infinite;
   z-index: 0;
   pointer-events: none;
 }
 
 @keyframes lightSweep {
-  0%, 100% { transform: translateX(-30%) translateY(-30%) rotate(0deg); }
+  0% { transform: translateX(-30%) translateY(-30%) rotate(-5deg); }
   50% { transform: translateX(30%) translateY(30%) rotate(5deg); }
+  100% { transform: translateX(-30%) translateY(-30%) rotate(-5deg); }
+}
+
+/* 网格线纹理 */
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(59, 130, 246, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(59, 130, 246, 0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
 }
 
 /* ============ 玻璃态卡片 ============ */

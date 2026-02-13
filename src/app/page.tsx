@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import type { AnalysisResult, KlineItem, NewsItem } from '@/types/stock';
-import { IconSearch, IconChart, IconTrendUp, IconTrendDown, IconMinus, IconShield, IconTarget, IconNews, IconExternalLink, IconBarChart, IconSwap, IconCandlestick } from '@/components/Icons';
+import { IconSearch, IconChart, IconTrendUp, IconTrendDown, IconMinus, IconShield, IconTarget, IconNews, IconExternalLink, IconBarChart, IconSwap, IconCandlestick, IconActivity } from '@/components/Icons';
 
 const KlineChart = dynamic(() => import('@/components/KlineChart'), { ssr: false });
 
@@ -21,6 +21,22 @@ interface FullAnalysis extends AnalysisResult {
   };
 }
 
+interface SearchResult {
+  code: string;
+  name: string;
+  market: string;
+  type: string;
+}
+
+interface IndexQuote {
+  code: string;
+  name: string;
+  price: number;
+  change: number;
+  changePercent: number;
+  amount: number;
+}
+
 export default function Home() {
   const router = useRouter();
   const [code, setCode] = useState('');
@@ -29,12 +45,111 @@ export default function Home() {
   const [error, setError] = useState('');
   const [chartType, setChartType] = useState<'daily' | '5min'>('daily');
 
-  const handleAnalyze = async () => {
-    const input = code.trim();
+  // 搜索建议
+  const [suggestions, setSuggestions] = useState<SearchResult[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
+
+  // 大盘数据
+  const [indices, setIndices] = useState<IndexQuote[]>([]);
+  const [marketTime, setMarketTime] = useState('');
+  const [marketLoading, setMarketLoading] = useState(true);
+
+  // 获取大盘数据
+  useEffect(() => {
+    const fetchMarket = async () => {
+      try {
+        const res = await fetch('/api/market-overview');
+        const data = await res.json();
+        if (data.indices) {
+          setIndices(data.indices);
+          setMarketTime(data.time);
+        }
+      } catch { /* ignore */ }
+      finally { setMarketLoading(false); }
+    };
+    fetchMarket();
+    const timer = setInterval(fetchMarket, 30000); // 30秒刷新
+    return () => clearInterval(timer);
+  }, []);
+
+  // 搜索建议 — 防抖
+  const fetchSuggestions = useCallback(async (query: string) => {
+    if (query.length < 1) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      setSuggestions(data.results || []);
+      setShowSuggestions((data.results || []).length > 0);
+      setSelectedIndex(-1);
+    } catch {
+      setSuggestions([]);
+    }
+  }, []);
+
+  const handleInputChange = (value: string) => {
+    setCode(value);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => fetchSuggestions(value.trim()), 300);
+  };
+
+  const handleSelectSuggestion = (item: SearchResult) => {
+    setCode(item.code);
+    setShowSuggestions(false);
+    setSuggestions([]);
+    handleAnalyze(item.code);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!showSuggestions || suggestions.length === 0) {
+      if (e.key === 'Enter') handleAnalyze();
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedIndex(prev => Math.min(prev + 1, suggestions.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedIndex(prev => Math.max(prev - 1, -1));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (selectedIndex >= 0 && selectedIndex < suggestions.length) {
+        handleSelectSuggestion(suggestions[selectedIndex]);
+      } else {
+        setShowSuggestions(false);
+        handleAnalyze();
+      }
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false);
+    }
+  };
+
+  // 点击外部关闭建议
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (suggestionsRef.current && !suggestionsRef.current.contains(e.target as Node) &&
+          inputRef.current && !inputRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleAnalyze = async (inputCode?: string) => {
+    const input = (inputCode || code).trim();
     if (!input) return;
     setLoading(true);
     setError('');
     setResult(null);
+    setShowSuggestions(false);
 
     try {
       const res = await fetch(`/api/analyze?code=${encodeURIComponent(input)}`);
@@ -72,7 +187,7 @@ export default function Home() {
   const priceColor = (v: number) => (v >= 0 ? 'text-red-400' : 'text-green-400');
 
   return (
-    <main className="max-w-6xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
+    <main className="max-w-6xl mx-auto px-4 py-6 sm:px-6 sm:py-8 bg-grid min-h-screen">
       {/* Header */}
       <div className="flex items-center justify-between mb-6 sm:mb-10 animate-fade-in-up">
         <div className="flex items-center gap-3">
@@ -88,33 +203,64 @@ export default function Home() {
       </div>
 
       {/* 搜索栏 */}
-      <div className="flex gap-3 mb-8 sm:mb-10 animate-fade-in-up delay-1">
-        <div className="relative flex-1">
-          <IconSearch size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-          <input
-            type="text"
-            inputMode="numeric"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()}
-            placeholder="输入股票/基金代码，如 600519"
-            className="input w-full pl-11 pr-4 py-3 sm:py-3.5 text-base sm:text-lg"
-          />
+      <div className="relative mb-8 sm:mb-10 animate-fade-in-up delay-1">
+        <div className="flex gap-3">
+          <div className="relative flex-1">
+            <IconSearch size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+            <input
+              ref={inputRef}
+              type="text"
+              value={code}
+              onChange={(e) => handleInputChange(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+              placeholder="输入股票代码、名称或拼音首字母"
+              className="input w-full pl-11 pr-4 py-3 sm:py-3.5 text-base sm:text-lg"
+            />
+            {/* 搜索建议下拉 */}
+            {showSuggestions && suggestions.length > 0 && (
+              <div
+                ref={suggestionsRef}
+                className="absolute top-full left-0 right-0 mt-2 card p-1.5 z-50 max-h-80 overflow-y-auto"
+              >
+                {suggestions.map((item, i) => (
+                  <button
+                    key={item.code}
+                    onClick={() => handleSelectSuggestion(item)}
+                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-left transition-colors ${
+                      i === selectedIndex
+                        ? 'bg-blue-500/15 text-blue-300'
+                        : 'hover:bg-[var(--bg-card-hover)] text-[var(--text-primary)]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="font-mono text-sm text-blue-400 shrink-0">{item.code.replace(/^(sh|sz|bj)/, '')}</span>
+                      <span className="text-sm truncate">{item.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[10px] text-[var(--text-muted)] px-1.5 py-0.5 rounded bg-[var(--bg-secondary)] border border-[var(--border-default)]">{item.market}</span>
+                      <span className="text-[10px] text-[var(--text-muted)]">{item.type}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <button
+            onClick={() => handleAnalyze()}
+            disabled={loading}
+            className="btn-primary px-6 sm:px-8 py-3 sm:py-3.5 text-base sm:text-lg flex items-center gap-2"
+          >
+            {loading ? (
+              <span className="inline-block w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <>
+                <IconSearch size={18} />
+                <span className="hidden sm:inline">分析</span>
+              </>
+            )}
+          </button>
         </div>
-        <button
-          onClick={handleAnalyze}
-          disabled={loading}
-          className="btn-primary px-6 sm:px-8 py-3 sm:py-3.5 text-base sm:text-lg flex items-center gap-2"
-        >
-          {loading ? (
-            <span className="inline-block w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-          ) : (
-            <>
-              <IconSearch size={18} />
-              <span className="hidden sm:inline">分析</span>
-            </>
-          )}
-        </button>
       </div>
 
       {/* 错误提示 */}
@@ -333,14 +479,62 @@ export default function Home() {
         </div>
       )}
 
-      {/* 空状态 */}
+      {/* 空状态 — 大盘行情 */}
       {!result && !error && !loading && (
-        <div className="text-center py-16 sm:py-24 animate-fade-in-up delay-2">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-blue-500/10 border border-blue-500/15 flex items-center justify-center">
-            <IconCandlestick size={28} className="text-blue-400" />
+        <div className="animate-fade-in-up delay-2">
+          {/* 大盘指数概览 */}
+          <div className="mb-8">
+            <h2 className="text-sm sm:text-base font-semibold mb-4 flex items-center gap-2 text-[var(--text-secondary)]">
+              <IconActivity size={16} className="text-blue-400" />
+              大盘行情
+              {marketTime && <span className="text-[10px] text-[var(--text-muted)] font-normal ml-2">{marketTime}</span>}
+            </h2>
+            {marketLoading ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="skeleton h-24" />
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                {indices.map((idx) => (
+                  <button
+                    key={idx.code}
+                    onClick={() => {
+                      setCode(idx.code);
+                      handleAnalyze(idx.code);
+                    }}
+                    className="card p-4 text-left hover:border-[var(--border-hover)] transition-all group cursor-pointer"
+                  >
+                    <div className="text-xs text-[var(--text-muted)] mb-1.5 group-hover:text-blue-400 transition-colors">{idx.name}</div>
+                    <div className={`text-lg sm:text-xl font-bold tabular-nums ${priceColor(idx.changePercent)}`}>
+                      {idx.price.toFixed(2)}
+                    </div>
+                    <div className={`text-xs mt-1 font-medium tabular-nums ${priceColor(idx.changePercent)}`}>
+                      {idx.changePercent >= 0 ? '+' : ''}{idx.changePercent.toFixed(2)}%
+                      <span className="ml-1.5 opacity-60">
+                        {idx.change >= 0 ? '+' : ''}{idx.change.toFixed(2)}
+                      </span>
+                    </div>
+                    {idx.amount > 0 && (
+                      <div className="text-[10px] text-[var(--text-muted)] mt-1.5">
+                        成交 {idx.amount.toFixed(0)}亿
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-          <p className="text-[var(--text-muted)] text-sm sm:text-base">输入股票代码开始分析</p>
-          <p className="text-[var(--text-muted)] text-xs sm:text-sm mt-1 opacity-60">支持 A 股、ETF、LOF</p>
+
+          {/* 提示 */}
+          <div className="text-center py-8 sm:py-12">
+            <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-blue-500/10 border border-blue-500/15 flex items-center justify-center">
+              <IconCandlestick size={26} className="text-blue-400" />
+            </div>
+            <p className="text-[var(--text-muted)] text-sm">输入股票代码、名称或拼音首字母开始分析</p>
+            <p className="text-[var(--text-muted)] text-xs mt-1 opacity-60">支持 A 股、ETF、LOF · 点击上方指数可快速查看</p>
+          </div>
         </div>
       )}
     </main>

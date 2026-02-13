@@ -75,12 +75,14 @@ export async function POST(req: NextRequest) {
 
 function parseXML(xml: string): Record<string, string> {
   const result: Record<string, string> = {};
-  const regex = /<(\w+)><!\[CDATA\[(.+?)\]\]><\/\1>|<(\w+)>(.+?)<\/\3>/g;
+  const regex = /<(\w+)><!\[CDATA\[([\s\S]*?)\]\]><\/\1>|<(\w+)>([\s\S]*?)<\/\3>/g;
   let match;
   while ((match = regex.exec(xml)) !== null) {
     const key = match[1] || match[3];
-    const value = match[2] || match[4];
-    result[key] = value;
+    const value = match[2] ?? match[4] ?? '';
+    if (key !== 'xml') {
+      result[key] = value;
+    }
   }
   return result;
 }

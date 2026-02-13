@@ -5,6 +5,12 @@ export const metadata: Metadata = {
   title: 'A股分析助手 — 实时行情 · 技术分析',
   description: '实时A股行情分析，覆盖MA/MACD/RSI/KDJ/BOLL等技术指标，提供操作建议',
   keywords: 'A股,股票分析,技术指标,MACD,RSI,KDJ,布林带,K线图',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'A股分析助手',
+  },
 };
 
 export const viewport: Viewport = {
@@ -17,10 +23,24 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="zh-CN">
+      <head>
+        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+      </head>
       <body className="antialiased">
         <div className="relative z-10">
           {children}
         </div>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                  navigator.serviceWorker.register('/sw.js').catch(() => {});
+                });
+              }
+            `,
+          }}
+        />
       </body>
     </html>
   );

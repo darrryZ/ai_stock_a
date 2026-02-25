@@ -323,53 +323,118 @@ export default function StockDetailPage() {
                 <IconActivity size={16} className="text-blue-400" />
                 资金流向
               </h3>
-              <div className="space-y-3">
-                {/* 主力 vs 散户 */}
-                <div className="flex items-center justify-between p-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-default)]">
-                  <span className="text-xs text-[var(--text-muted)]">主力净流入</span>
-                  <span className={`text-sm font-bold tabular-nums ${result.moneyFlow.mainNet >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-                    {result.moneyFlow.mainNet >= 0 ? '+' : ''}{result.moneyFlow.mainNet.toFixed(2)} 万
-                  </span>
-                </div>
-                {/* 净流入柱状条 */}
-                <div className="space-y-2">
-                  {[
-                    { label: '超大单', value: result.moneyFlow.superLargeNet },
-                    { label: '大单', value: result.moneyFlow.largeNet },
-                    { label: '中单', value: result.moneyFlow.mediumNet },
-                    { label: '小单', value: result.moneyFlow.smallNet },
-                  ].map((item) => {
-                    const maxAbs = Math.max(
-                      Math.abs(result.moneyFlow!.superLargeNet),
-                      Math.abs(result.moneyFlow!.largeNet),
-                      Math.abs(result.moneyFlow!.mediumNet),
-                      Math.abs(result.moneyFlow!.smallNet),
-                      1,
-                    );
-                    const pct = Math.min(Math.abs(item.value) / maxAbs * 100, 100);
-                    return (
-                      <div key={item.label} className="flex items-center gap-2">
-                        <span className="text-[10px] text-[var(--text-muted)] w-10 shrink-0">{item.label}</span>
-                        <div className="flex-1 h-4 bg-[var(--bg-secondary)] rounded-full overflow-hidden relative">
+              {(() => {
+                const mf = result.moneyFlow!;
+                const mainTotal = mf.mainInflow + mf.mainOutflow;
+                const mainInflowPct = mainTotal > 0 ? (mf.mainInflow / mainTotal) * 100 : 50;
+                const retailTotal = mf.retailInflow + mf.retailOutflow;
+                const retailInflowPct = retailTotal > 0 ? (mf.retailInflow / retailTotal) * 100 : 50;
+                const fmtAmt = (v: number) => {
+                  const abs = Math.abs(v);
+                  const sign = v >= 0 ? '+' : '';
+                  return abs >= 10000 ? `${sign}${(v / 10000).toFixed(2)}亿` : `${sign}${v.toFixed(2)}万`;
+                };
+                const fmtFlow = (v: number) => v >= 10000 ? `${(v / 10000).toFixed(2)}亿` : `${v.toFixed(0)}万`;
+                return (
+                  <div className="space-y-4">
+                    {/* 双饼图区域 */}
+                    <div className="grid grid-cols-2 gap-4">
+                      {/* 主力资金 */}
+                      <div className="p-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-default)]">
+                        <div className="text-[11px] font-medium text-[var(--text-muted)] uppercase tracking-wider mb-3">主力资金</div>
+                        <div className="flex justify-center mb-3">
                           <div
-                            className={`h-full rounded-full transition-all ${item.value >= 0 ? 'bg-red-500/60' : 'bg-green-500/60'}`}
-                            style={{ width: `${pct}%` }}
-                          />
+                            className="w-[72px] h-[72px] sm:w-[88px] sm:h-[88px] rounded-full relative"
+                            style={{ background: `conic-gradient(rgba(239,68,68,0.8) 0% ${mainInflowPct}%, rgba(34,197,94,0.8) ${mainInflowPct}% 100%)` }}
+                          >
+                            <div className="absolute inset-[6px] sm:inset-[7px] rounded-full bg-[var(--bg-secondary)] flex flex-col items-center justify-center">
+                              <span className="text-[9px] text-[var(--text-muted)]">净流入</span>
+                              <span className={`text-[11px] sm:text-xs font-bold tabular-nums ${mf.mainNet >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                                {fmtAmt(mf.mainNet)}
+                              </span>
+                            </div>
+                          </div>
                         </div>
-                        <span className={`text-[10px] tabular-nums w-20 text-right ${item.value >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-                          {item.value >= 0 ? '+' : ''}{(item.value / 10000).toFixed(2)}亿
-                        </span>
+                        <div className="space-y-1.5 text-[10px] sm:text-[11px]">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[var(--text-muted)] flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-red-500/80 inline-block" />流入
+                            </span>
+                            <span className="tabular-nums text-red-400">{fmtFlow(mf.mainInflow)}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-[var(--text-muted)] flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-green-500/80 inline-block" />流出
+                            </span>
+                            <span className="tabular-nums text-green-400">{fmtFlow(mf.mainOutflow)}</span>
+                          </div>
+                        </div>
                       </div>
-                    );
-                  })}
-                </div>
-                <div className="flex items-center justify-between p-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-default)]">
-                  <span className="text-xs text-[var(--text-muted)]">散户净流入</span>
-                  <span className={`text-sm font-bold tabular-nums ${result.moneyFlow.retailNet >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-                    {result.moneyFlow.retailNet >= 0 ? '+' : ''}{result.moneyFlow.retailNet.toFixed(2)} 万
-                  </span>
-                </div>
-              </div>
+                      {/* 散户资金 */}
+                      <div className="p-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-default)]">
+                        <div className="text-[11px] font-medium text-[var(--text-muted)] uppercase tracking-wider mb-3">散户资金</div>
+                        <div className="flex justify-center mb-3">
+                          <div
+                            className="w-[72px] h-[72px] sm:w-[88px] sm:h-[88px] rounded-full relative"
+                            style={{ background: `conic-gradient(rgba(239,68,68,0.8) 0% ${retailInflowPct}%, rgba(34,197,94,0.8) ${retailInflowPct}% 100%)` }}
+                          >
+                            <div className="absolute inset-[6px] sm:inset-[7px] rounded-full bg-[var(--bg-secondary)] flex flex-col items-center justify-center">
+                              <span className="text-[9px] text-[var(--text-muted)]">净流入</span>
+                              <span className={`text-[11px] sm:text-xs font-bold tabular-nums ${mf.retailNet >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                                {fmtAmt(mf.retailNet)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="space-y-1.5 text-[10px] sm:text-[11px]">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[var(--text-muted)] flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-red-500/80 inline-block" />流入
+                            </span>
+                            <span className="tabular-nums text-red-400">{fmtFlow(mf.retailInflow)}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-[var(--text-muted)] flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-green-500/80 inline-block" />流出
+                            </span>
+                            <span className="tabular-nums text-green-400">{fmtFlow(mf.retailOutflow)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    {/* 资金明细：超大单/大单/中单/小单 */}
+                    <div className="space-y-2">
+                      <div className="text-[11px] font-medium text-[var(--text-muted)] uppercase tracking-wider">资金明细</div>
+                      {[
+                        { label: '超大单', value: mf.superLargeNet },
+                        { label: '大单', value: mf.largeNet },
+                        { label: '中单', value: mf.mediumNet },
+                        { label: '小单', value: mf.smallNet },
+                      ].map((item) => {
+                        const maxAbs = Math.max(
+                          Math.abs(mf.superLargeNet), Math.abs(mf.largeNet),
+                          Math.abs(mf.mediumNet), Math.abs(mf.smallNet), 1,
+                        );
+                        const pct = Math.min(Math.abs(item.value) / maxAbs * 100, 100);
+                        return (
+                          <div key={item.label} className="flex items-center gap-2">
+                            <span className="text-[10px] text-[var(--text-muted)] w-10 shrink-0">{item.label}</span>
+                            <div className="flex-1 h-3.5 bg-[var(--bg-primary)]/50 rounded overflow-hidden relative">
+                              <div
+                                className={`h-full rounded transition-all ${item.value >= 0 ? 'bg-red-500/50' : 'bg-green-500/50'}`}
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                            <span className={`text-[10px] tabular-nums w-16 text-right ${item.value >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                              {item.value >= 0 ? '+' : ''}{(item.value / 10000).toFixed(2)}亿
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
 
